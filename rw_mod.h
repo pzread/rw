@@ -29,6 +29,3 @@ extern void rw_hook_init(void);
 extern int rw_hook_install(struct gendisk *gd);
 extern void rw_cache_init(void);
 extern int rw_hook_writeback_all(bool reboot);
-
-extern void hook_info_lookup(struct gendisk *gd);
-

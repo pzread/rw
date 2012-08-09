@@ -20,7 +20,7 @@ static int __init rw_init(){
     cdev_init(&rw_cdev,&rw_fops);
     cdev_add(&rw_cdev,rw_dev,1);
 
-    pr_alert("RW:Version 2\n");
+    pr_alert("RW:Version 3\n");
     rw_test();
 
     pr_alert("RW:Init\n");

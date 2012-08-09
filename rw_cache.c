@@ -4,12 +4,18 @@
 #include"rw_cache.h"
 
 void rw_cache_init(){
+    int i;
+
     rw_cache_info_cachep = kmem_cache_create("rw_cache_info_cachep",sizeof(struct rw_cache_info),0,0,NULL);
     rw_cache_cluster_cachep = kmem_cache_create("rw_cache_cluster_cachep",sizeof(struct rw_cache_cluster),0,0,NULL);
     rw_wait_sector_cachep = kmem_cache_create("rw_wait_sector_cachep",sizeof(struct rw_wait_sector),0,0,NULL);
-    cache_sector_cachep = kmem_cache_create("cache_sector_cachep",512,0,0,NULL);
     cache_req_info_cachep = kmem_cache_create("cache_req_info_cachep",sizeof(struct cache_req_info),0,0,NULL);
     cache_writeback_info_cachep = kmem_cache_create("cache_writeback_info_cachep",sizeof(struct cache_writeback_info),0,0,NULL);
+
+    for_each_cpu(i,cpu_possible_mask){
+	per_cpu(cache_sector_pool,i) = (u8*)__get_free_pages(GFP_ATOMIC,0);
+	per_cpu(cache_sector_pool_count,i) = 0;
+    }
 }
 
 struct rw_cache_info* rw_cache_create(struct rw_hook_info *hook_info){
@@ -20,7 +26,6 @@ struct rw_cache_info* rw_cache_create(struct rw_hook_info *hook_info){
     INIT_RADIX_TREE(&ca_info->ca_root,GFP_ATOMIC);
     ca_info->hook_info = hook_info;
     atomic_set(&ca_info->dirty_count,0);
-    ca_info->dirty_list = NULL;
 
     return ca_info;
 }
@@ -49,7 +54,23 @@ struct rw_cache_cluster* rw_cache_get_cluster(struct rw_cache_info *ca_info,unsi
 }
 
 u8* rw_cache_alloc_sector(void){
-    return kmem_cache_alloc(cache_sector_cachep,GFP_ATOMIC);
+    u8 *page;
+    unsigned int count;
+
+    BUG_ON(preemptible());
+
+    page = __get_cpu_var(cache_sector_pool);
+    count = __get_cpu_var(cache_sector_pool_count);
+    page += count * 512;
+
+    count++;
+    if((count * 512) == PAGE_SIZE){
+	__get_cpu_var(cache_sector_pool) = (u8*)__get_free_pages(GFP_ATOMIC,0);
+	count = 0;	
+    }
+    __get_cpu_var(cache_sector_pool_count) = count;
+
+    return page;
 }
 
 int rw_cache_wait_sector(struct rw_cache_cluster *ca_cluster,unsigned int idx,u8 *buffer,rw_loaded_fn loaded_fn,void *loaded_private){
@@ -206,9 +227,13 @@ static void cache_endio(struct bio *bio,int error){
 
 int rw_cache_writeback(struct rw_cache_info *ca_info,unsigned long limit_cluster){
     int i;
+    int ret;
 
+    struct rw_cache_cluster **ca_cluster_pool;
     struct rw_cache_cluster *ca_cluster;
     struct rw_cache_cluster *next;
+    unsigned long addr;
+
     unsigned int idx;
     unsigned int idx_st;
     unsigned int size;
@@ -231,18 +256,31 @@ int rw_cache_writeback(struct rw_cache_info *ca_info,unsigned long limit_cluster
     if(limit_cluster == 0){
 	next = NULL;
     }else{
-	next = ca_info->dirty_list;
-	ca_cluster = ca_info->dirty_list;
-	while(ca_cluster != NULL){
-	    ca_info->dirty_list = ca_cluster->next;
-	    limit_cluster--;
+	ca_cluster_pool = kmalloc(sizeof(void*) * 4096,GFP_ATOMIC);
+	addr = 0;
+	next = NULL;
+	while((ret = radix_tree_gang_lookup(&ca_info->ca_root,(void**)ca_cluster_pool,addr,4096)) > 0){
+	    for(i = 0;i < ret;i++){
+		ca_cluster = ca_cluster_pool[i];
+
+		if(ca_cluster->dirty != 0){
+		    ca_cluster->next = next;
+		    next = ca_cluster;
+
+		    limit_cluster--;
+		    if(limit_cluster == 0){
+			break;
+		    }
+		}
+
+		addr = (ca_cluster->start + CACHE_CLUSTER_SIZE) << 9UL;
+	    }
+
 	    if(limit_cluster == 0){
-		ca_cluster->next = NULL;
 		break;
-	    }else{
-		ca_cluster = ca_cluster->next;
 	    }
 	}
+	kfree(ca_cluster_pool);
     }
 
     spin_unlock(&ca_info->ca_lock);

@@ -15,7 +15,6 @@ struct rw_cache_info{
     struct radix_tree_root ca_root;
     struct rw_hook_info *hook_info;
     atomic_t dirty_count;
-    struct rw_cache_cluster *dirty_list;
 };
 struct rw_cache_cluster{
     u8 *sector[CACHE_CLUSTER_SIZE];
@@ -35,3 +34,5 @@ struct rw_wait_sector{
     rw_loaded_fn *loaded_fn;
     void *loaded_private;
 };
+
+

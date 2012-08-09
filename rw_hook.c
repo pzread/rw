@@ -82,14 +82,14 @@ static int hook_watcher(void *data){
 	    bar_str[50] = '\0';
 	    
 	    for(i = 0;i < 50;i++){
-		sprintf(out_str,"\rRW:Write Back [%s]  %3d%%",bar_str,i * 2);
+		sprintf(out_str,"\rRW:WriteBack [%s]  %3d%%",bar_str,i * 2);
 		tty->f_op->write(tty,out_str,strlen(out_str),NULL);
 
 		rw_cache_writeback(hook_info->ca_info,wb_limit);
 
 		bar_str[i] = '#';
 	    }
-	    
+
 	    tty->f_op->write(tty,"\n",2,NULL);
 	    set_fs(old_fs);
 	    filp_close(tty,0);
@@ -191,8 +191,6 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 		spin_lock_irq(&ca_cluster->lock);
 
 		if(rw == 1 && ca_cluster->next == ca_cluster){
-		    ca_cluster->next = hook_info->ca_info->dirty_list;
-		    hook_info->ca_info->dirty_list = ca_cluster;
 		    atomic_inc(&hook_info->ca_info->dirty_count);
 		}
 
