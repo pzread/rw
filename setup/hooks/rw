@@ -1,0 +1,9 @@
+
+run_latehook() {
+    local major=$(awk -F ',' '{print $1}' /etc/rw.conf)
+    local minor=$(awk -F ',' '{print $2}' /etc/rw.conf)
+
+    modprobe rw rw_test_major=${major} rw_test_minor=${minor}
+}
+
+# vim: set ft=sh ts=4 sw=4 et:

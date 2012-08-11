@@ -202,9 +202,9 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 	    if(ca_cluster->bitmap & (1 << idx)){
 		if(rw == 1){
 		    ca_cluster->dirty |= (1 << idx);
-		    memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + offset,512); 
+		    memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + bv->bv_offset + offset,512); 
 		}else{
-		    memcpy(page_address(bv->bv_page) + offset,ca_cluster->sector[idx],512); 
+		    memcpy(page_address(bv->bv_page) + bv->bv_offset + offset,ca_cluster->sector[idx],512); 
 		}
 
 		spin_unlock_irq(&ca_cluster->lock);
@@ -217,7 +217,7 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 		}
 
 		ca_cluster->dirty |= (1 << idx);
-		memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + offset,512); 
+		memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + bv->bv_offset + offset,512); 
 
 		spin_unlock_irq(&ca_cluster->lock);
 
@@ -226,7 +226,7 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 		loaded_info = kmem_cache_alloc(hook_loaded_info_cachep,GFP_ATOMIC);
 		loaded_info->bio_info = bio_info;
 
-		rw_cache_wait_sector(ca_cluster,idx,page_address(bv->bv_page) + offset,hook_loaded,loaded_info);
+		rw_cache_wait_sector(ca_cluster,idx,page_address(bv->bv_page) + bv->bv_offset + offset,hook_loaded,loaded_info);
 
 		if(ca_cluster->sector[idx] == NULL){
 		    ca_cluster->sector[idx] = rw_cache_alloc_sector();

@@ -11,8 +11,6 @@
 #include"rw.h"
 #include"rw_mod.h"
 
-#define IOCTL_APP_GET _IOR('x',0x0,int)
-
 static int __init rw_init(){
     alloc_chrdev_region(&rw_dev,0,1,"rw"); 
     rw_class = class_create(THIS_MODULE,"chardrv");
@@ -20,7 +18,7 @@ static int __init rw_init(){
     cdev_init(&rw_cdev,&rw_fops);
     cdev_add(&rw_cdev,rw_dev,1);
 
-    pr_alert("RW:Version 3\n");
+    pr_alert("RW:Version 4\n");
     rw_test();
 
     pr_alert("RW:Init\n");
@@ -34,6 +32,8 @@ static void __exit rw_exit(){
 
     pr_alert("RW:Exit\n");
 }
+module_param(rw_test_major,int,S_IRUGO);
+module_param(rw_test_minor,int,S_IRUGO);
 module_init(rw_init);
 module_exit(rw_exit);
 MODULE_LICENSE("GPL");
@@ -45,11 +45,6 @@ static int rw_release(struct inode *i,struct file *f){
     return 0;
 }
 static long rw_ioctl(struct file *f,unsigned int cmd,unsigned long arg){
-    switch(cmd){
-	case IOCTL_APP_GET:
-	    break;
-    }
-
     return 0;
 }
 
@@ -67,15 +62,13 @@ static int rw_test(){
     rw_hook_init();
     rw_cache_init();
 
-    gd = get_gendisk(MKDEV(8,0),&no);
+    gd = get_gendisk(MKDEV(rw_test_major,rw_test_minor),&no);
     pr_alert("%016lx %d\n",(unsigned long)gd,no);
 
-    //pr_alert("%016lx\n",(unsigned long)bdget(MKDEV(254,0)));
-    //pr_alert("%016lx\n",(unsigned long)bdget_disk(gd,0));
-
-    rw_hook_install(gd); 
-
-    register_reboot_notifier(&reboot_nb);
+    if(gd != NULL){
+	rw_hook_install(gd); 
+	register_reboot_notifier(&reboot_nb);
+    }
 
     return 0;
 }

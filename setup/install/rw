@@ -1,0 +1,15 @@
+#!/bin/bash
+
+build() {
+    add_module 'rw'
+    add_file '/etc/rw.conf'
+    add_runscript
+}
+
+help() {
+    cat <<HELPEOF
+Load rw module.
+HELPEOF
+}
+
+# vim: set ft=sh ts=4 sw=4 et:

@@ -26,6 +26,7 @@ struct rw_cache_info* rw_cache_create(struct rw_hook_info *hook_info){
     INIT_RADIX_TREE(&ca_info->ca_root,GFP_ATOMIC);
     ca_info->hook_info = hook_info;
     atomic_set(&ca_info->dirty_count,0);
+    ca_info->dirty_list = NULL;
 
     return ca_info;
 }

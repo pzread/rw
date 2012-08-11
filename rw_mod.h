@@ -13,6 +13,8 @@ static struct file_operations rw_fops = {
     .release = rw_release,
     .unlocked_ioctl = rw_ioctl
 };
+static int rw_test_major;
+static int rw_test_minor;
 
 static int rw_reboot(struct notifier_block *nb,unsigned long action,void *dev);
 static int rw_test(void);
