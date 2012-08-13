@@ -1,4 +1,6 @@
-#define CACHE_CLUSTER_SIZE 16
+#define CACHE_CLUSTER_SIZE 16UL
+
+#define CACHE_WRITEBACK_FORCE 0x1
 
 struct rw_hook_info{
     struct hlist_node node;
@@ -14,16 +16,19 @@ struct rw_cache_info{
     spinlock_t ca_lock;
     struct radix_tree_root ca_root;
     struct rw_hook_info *hook_info;
-    atomic_t dirty_count;
+    atomic64_t cache_size;
+    atomic64_t dirty_count;
     struct rw_cache_cluster *dirty_list;
 };
+
 struct rw_cache_cluster{
     u8 *sector[CACHE_CLUSTER_SIZE];
     u16 bitmap;
+    u16 used;
     u16 dirty;
+    atomic_t refcount;
     spinlock_t lock;
     sector_t start;
-    struct rw_cache_cluster *next;
     struct rw_wait_sector *wait_list;
 };
 

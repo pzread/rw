@@ -18,7 +18,7 @@ static int __init rw_init(){
     cdev_init(&rw_cdev,&rw_fops);
     cdev_add(&rw_cdev,rw_dev,1);
 
-    pr_alert("RW:Version 4\n");
+    pr_alert("RW:4.2 Mint Choco\n");
     rw_test();
 
     pr_alert("RW:Init\n");
@@ -63,12 +63,11 @@ static int rw_test(){
     rw_cache_init();
 
     gd = get_gendisk(MKDEV(rw_test_major,rw_test_minor),&no);
-    pr_alert("%016lx %d\n",(unsigned long)gd,no);
+    pr_alert("RW:%016lx %d\n",(unsigned long)gd,no);
 
-    if(gd != NULL){
-	rw_hook_install(gd); 
-	register_reboot_notifier(&reboot_nb);
-    }
+    rw_hook_install(gd); 
+
+    register_reboot_notifier(&reboot_nb);
 
     return 0;
 }
