@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="1024"
+   height="1024"
+   id="svg2"
+   version="1.1"
+   inkscape:version="0.48.3.1 r9886"
+   sodipodi:docname="mintchoco.svg">
+  <defs
+     id="defs4">
+    <linearGradient
+       id="linearGradient3781">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop3783" />
+      <stop
+         id="stop3789"
+         offset="0.36904761"
+         style="stop-color:#000000;stop-opacity:0.49803922;" />
+      <stop
+         style="stop-color:#000000;stop-opacity:0;"
+         offset="1"
+         id="stop3785" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient5258">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop5260" />
+      <stop
+         id="stop5266"
+         offset="0.64285713"
+         style="stop-color:#333333;stop-opacity:0.49803922;" />
+      <stop
+         style="stop-color:#666666;stop-opacity:0;"
+         offset="1"
+         id="stop5262" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient5246">
+      <stop
+         style="stop-color:#000000;stop-opacity:1;"
+         offset="0"
+         id="stop5248" />
+      <stop
+         id="stop5254"
+         offset="0.17857143"
+         style="stop-color:#000000;stop-opacity:0.49803922;" />
+      <stop
+         style="stop-color:#000000;stop-opacity:0.24705882;"
+         offset="0.58928573"
+         id="stop5256" />
+      <stop
+         style="stop-color:#000000;stop-opacity:0;"
+         offset="1"
+         id="stop5250" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient5258"
+       id="linearGradient5264"
+       x1="-1052.3622"
+       y1="512"
+       x2="-28.362183"
+       y2="512"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3781"
+       id="linearGradient3787"
+       x1="0"
+       y1="540.36218"
+       x2="1024"
+       y2="540.36218"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(28.362183,-1052.3622)" />
+  </defs>
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="0.46992701"
+     inkscape:cx="409.47502"
+     inkscape:cy="311.29543"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     showborder="true"
+     inkscape:showpageshadow="false"
+     inkscape:window-width="1920"
+     inkscape:window-height="1019"
+     inkscape:window-x="1366"
+     inkscape:window-y="27"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,-28.362183)"
+     style="display:inline">
+    <rect
+       style="fill:#453d33;fill-opacity:1;stroke:none"
+       id="rect3894"
+       width="1024"
+       height="1024"
+       x="0"
+       y="28.362183" />
+    <path
+       style="fill:none;stroke:#7bc89e;stroke-width:128;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;fill-opacity:1"
+       d="M 1126,391 391,1128 81,633 633,84 z"
+       id="path3888"
+       inkscape:connector-curvature="0"
+       transform="translate(0,28.362183)"
+       sodipodi:nodetypes="ccccc" />
+    <rect
+       style="fill:url(#linearGradient3787);fill-opacity:1;stroke:none;opacity:0.3"
+       id="rect3779"
+       width="1024"
+       height="1024"
+       x="28.362183"
+       y="-1024"
+       transform="matrix(0,1,-1,0,0,0)" />
+  </g>
+  <g
+     inkscape:groupmode="layer"
+     id="layer2"
+     inkscape:label="Layer 2"
+     sodipodi:insensitive="true"
+     style="display:inline">
+    <flowRoot
+       xml:space="preserve"
+       id="flowRoot3761"
+       style="font-size:128px;font-style:normal;font-weight:bold;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Source Sans Pro;-inkscape-font-specification:Source Sans Pro Bold"><flowRegion
+         id="flowRegion3763"><rect
+           id="rect3765"
+           width="727.77258"
+           height="661.80493"
+           x="129.80739"
+           y="204.72383"
+           style="font-size:128px;font-weight:bold;font-family:Source Sans Pro;-inkscape-font-specification:Source Sans Pro Bold" /></flowRegion><flowPara
+         id="flowPara3767" /></flowRoot>    <flowRoot
+       xml:space="preserve"
+       id="flowRoot3769"
+       style="font-size:40px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#645631;fill-opacity:1;stroke:none;font-family:Source Sans Pro;-inkscape-font-specification:Source Sans Pro"><flowRegion
+         id="flowRegion3771"><rect
+           id="rect3773"
+           width="838.4281"
+           height="787.35632"
+           x="53.199753"
+           y="130.24419"
+           style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;fill:#645631;fill-opacity:1;font-family:Source Sans Pro;-inkscape-font-specification:Source Sans Pro" /></flowRegion><flowPara
+         id="flowPara3775" /></flowRoot>    <flowRoot
+       xml:space="preserve"
+       id="flowRoot3777"
+       style="font-size:512px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#6699cc;fill-opacity:1;stroke:none;font-family:Sans"
+       transform="translate(136.19137,310.68655)"><flowRegion
+         id="flowRegion3779"><rect
+           id="rect3781"
+           width="751.18048"
+           height="693.72473"
+           x="106.39951"
+           y="143.01212"
+           style="font-size:512px;fill:#6699cc;fill-opacity:1" /></flowRegion><flowPara
+         id="flowPara3785"
+         style="font-size:550px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;fill:#6699cc;fill-opacity:1;font-family:Source Sans Pro;-inkscape-font-specification:Source Sans Pro">RW</flowPara></flowRoot>  </g>
+</svg>

@@ -65,9 +65,10 @@ static int rw_test(){
     gd = get_gendisk(MKDEV(rw_test_major,rw_test_minor),&no);
     pr_alert("RW:%016lx %d\n",(unsigned long)gd,no);
 
-    rw_hook_install(gd); 
-
-    register_reboot_notifier(&reboot_nb);
+    if(gd != NULL){
+	rw_hook_install(gd); 
+	register_reboot_notifier(&reboot_nb);
+    }
 
     return 0;
 }

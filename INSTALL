@@ -1,0 +1,29 @@
+##RW 4.x Mint Choco
+
+#Decide which device you want to hook
+1.  ./listdev.sh
+2.  Remember the major:minor of the device you want to hook
+
+
+#Compile and Install
+1.  make
+2.  gzip rw.ko
+3.  mv rw.ko.gz /lib/modules/extramodules-xxx
+4.  depmod -A
+
+
+If you have "mkinitcpio"
+5.  cp setup/rw.conf /etc/rw.conf
+6.  Edit /etc/rw.conf and change "8:0" to the major:minor you decided before
+8.  cp setup/hooks/rw /usr/lib/initcpio/hooks
+9.  cp setup/install/rw /usr/lib/initcpio/install
+10. Edit /etc/mkinitcpio.conf and add "rw" to the end of "HOOKS=xxx" 
+    (Ex: HOOKS="xxx xxx xxxx rw")
+11. Run mkinitcpio to create initramfs images
+    (Ex: For the stock Arch Linux kernel, run "mkinitcpio -p linux")
+12. Reboot
+
+
+Else
+5.  Make "modprobe rw rw_test_major=A rw_test_minor=B" run at startup
+    (A and B are the major:minor you decided before. Ex: modprobe rw rw_test_major=8 rw_test_minor=0)
