@@ -1,0 +1,9 @@
+[random-rw]
+rw=randrw
+size=512m
+directory=/home/user
+
+[seq-rw]
+rw=rw
+size=512m
+directory=/home/user
