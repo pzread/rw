@@ -10,10 +10,13 @@ void rw_hook_init(){
 
     rw_hook_info_cachep = kmem_cache_create("rw_hook_info_cachep",sizeof(struct rw_hook_info),0,0,NULL);
     hook_bio_info_cachep = kmem_cache_create("hook_bio_info_cachep",sizeof(struct hook_bio_info),0,0,NULL);
-    hook_loaded_info_cachep = kmem_cache_create("hook_loaded_info_cachep",sizeof(struct hook_loaded_info),0,0,NULL);
 
     for(i = 0;i < HOOK_INFO_HASHSIZE;i++){
 	INIT_HLIST_HEAD(&hook_info_hash[i]);
+    }
+
+    for(i = 0;i < 256;i++){
+	atomic64_set(&used_count[i],0);
     }
 
     atomic_set(&hook_count,0);
@@ -40,7 +43,6 @@ int rw_hook_install(struct gendisk *gd){
     atomic_set(&hook_info->pending_count,0);
 
     atomic_inc(&hook_count);
-
     gd->queue->make_request_fn = hook_make;
 
     return 0;
@@ -49,7 +51,8 @@ static int hook_watcher(void *data){
     int i;
 
     struct rw_hook_info *hook_info;
-    int scan_delay;
+    struct rw_cache_info *ca_info;
+    unsigned long scan_delay;
     unsigned long scan_start;
     unsigned long scan_next;
     unsigned long wb_limit;
@@ -60,6 +63,7 @@ static int hook_watcher(void *data){
     char out_str[128];
 
     hook_info = (struct rw_hook_info*)data;
+    ca_info = hook_info->ca_info;
     scan_start = 0;
     scan_delay = 0;
     while(true){
@@ -72,7 +76,7 @@ static int hook_watcher(void *data){
 		schedule_timeout_interruptible(1 * HZ);
 	    }
 
-	    wb_limit = atomic64_read(&hook_info->ca_info->dirty_count) / 50UL + 1UL;
+	    wb_limit = atomic64_read(&ca_info->dirty_count) / 50UL + 1UL;
 	    pr_alert("RW:Begin write-back %lu\n",wb_limit);
 
 	    tty = filp_open("/dev/tty0",O_RDWR,0);
@@ -90,7 +94,7 @@ static int hook_watcher(void *data){
 		tty->f_op->write(tty,out_str,strlen(out_str),NULL);
 
 		//Careful, free_limit always should be 0.
-		rw_cache_scan(hook_info->ca_info,scan_next,0,wb_limit,CACHE_WRITEBACK_FORCE,&scan_next);
+		rw_cache_scan(ca_info,scan_next,0,wb_limit,CACHE_WRITEBACK_FORCE,&scan_next);
 		scan_start = scan_next;
 
 		bar_str[i] = '#';
@@ -109,12 +113,17 @@ static int hook_watcher(void *data){
 	    break;
 	}
 
-	if(scan_delay == 600){
-	    rw_cache_scan(hook_info->ca_info,scan_start,1048576,131072,0,&scan_next);
+	scan_delay++;
+	if((scan_delay % 60UL) == 0){
+	    rw_cache_scan(ca_info,scan_start,1048576,0,0,&scan_next);
 	    scan_start = scan_next;
-	    scan_delay = 0;
-	}else{
-	    scan_delay++;
+
+	    pr_alert("\n%lu %lu\n",scan_delay,atomic64_read(&ca_info->cache_size));
+	    for(i = 0;i < 256;i++){
+		if(atomic64_read(&used_count[i]) > 0){
+		    pr_alert("%d %lu\n",i,atomic64_read(&used_count[i]));
+		}
+	    }
 	}
 
 	schedule_timeout_interruptible(1 * HZ);
@@ -148,6 +157,7 @@ static struct rw_hook_info* hook_info_lookup(struct gendisk *gd){
 
 static void hook_make(struct request_queue *q, struct bio *bio){
     struct rw_hook_info *hook_info;
+    struct rw_cache_info *ca_info;
     int rw;
     struct hook_bio_info *bio_info = NULL;
     struct bio_vec *bv;
@@ -162,7 +172,6 @@ static void hook_make(struct request_queue *q, struct bio *bio){
     bool need_lock;
 
     struct rw_cache_cluster *ca_cluster = NULL;
-    struct hook_loaded_info *loaded_info;
     unsigned int wait_remain;
 
     hook_info = hook_info_lookup(bio->bi_bdev->bd_disk);
@@ -170,6 +179,7 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 	hook_info->ori_make(q,bio);
 	return;
     }
+    ca_info = hook_info->ca_info;
 
     rw = bio_data_dir(bio);
     bio_info = kmem_cache_alloc(hook_bio_info_cachep,GFP_ATOMIC);
@@ -196,12 +206,8 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 
 		}
 
-		spin_lock_irq(&hook_info->ca_info->ca_lock);
-
-		ca_cluster = rw_cache_get_cluster(hook_info->ca_info,addr);
+		ca_cluster = rw_cache_get_cluster(ca_info,addr);
 		need_lookup = false;
-
-		spin_unlock_irq(&hook_info->ca_info->ca_lock);
 
 		spin_lock_irq(&ca_cluster->lock);
 
@@ -213,12 +219,16 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 		need_lock = false;
 	    }
 
-	    ca_cluster->used |= (1 << idx);
+	    if(ca_cluster->used[idx] < CACHE_CLUSTER_USED_MAX){
+		atomic64_dec(&used_count[ca_cluster->used[idx]]);
+		ca_cluster->used[idx]++;
+		atomic64_inc(&used_count[ca_cluster->used[idx]]);
+	    }
 
 	    if((ca_cluster->bitmap & (1 << idx)) != 0){
 		if(rw == 1){
 		    if((ca_cluster->dirty & (1 << idx)) == 0){
-			atomic64_inc(&hook_info->ca_info->dirty_count);
+			atomic64_inc(&ca_info->dirty_count);
 		    }
 		    ca_cluster->dirty |= (1 << idx);
 		    memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + bv->bv_offset + offset,512); 
@@ -232,12 +242,12 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 		hook_end_bio(bio_info,512);
 	    }else if(rw == 1){
 		if(ca_cluster->sector[idx] == NULL){
-		    ca_cluster->sector[idx] = rw_cache_alloc_sector(hook_info->ca_info);
+		    ca_cluster->sector[idx] = rw_cache_alloc_sector(ca_info);
 		    ca_cluster->bitmap |= (1 << idx);
 		}
 
 		if((ca_cluster->dirty & (1 << idx)) == 0){
-		    atomic64_inc(&hook_info->ca_info->dirty_count);
+		    atomic64_inc(&ca_info->dirty_count);
 		}
 		ca_cluster->dirty |= (1 << idx);
 		memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + bv->bv_offset + offset,512); 
@@ -247,13 +257,10 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 		need_lock = true;
 		hook_end_bio(bio_info,512);
 	    }else{
-		loaded_info = kmem_cache_alloc(hook_loaded_info_cachep,GFP_ATOMIC);
-		loaded_info->bio_info = bio_info;
-
-		rw_cache_wait_sector(ca_cluster,idx,page_address(bv->bv_page) + bv->bv_offset + offset,hook_loaded,loaded_info);
+		rw_cache_wait_sector(ca_cluster,idx,page_address(bv->bv_page) + bv->bv_offset + offset,hook_loaded,bio_info);
 
 		if(ca_cluster->sector[idx] == NULL){
-		    ca_cluster->sector[idx] = rw_cache_alloc_sector(hook_info->ca_info);
+		    ca_cluster->sector[idx] = rw_cache_alloc_sector(ca_info);
 
 		    wait_remain += 512;
 		    goto skip_submit;
@@ -266,7 +273,7 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 	    }
 
 	    if(wait_remain > 0){
-		rw_cache_load(hook_info->ca_info,bio->bi_bdev,sector - (sector_t)(wait_remain >> 9),bio->bi_rw,wait_remain);
+		rw_cache_load(ca_info,bio->bi_bdev,sector - (sector_t)(wait_remain >> 9),wait_remain);
 		wait_remain = 0;
 	    }
 
@@ -292,16 +299,14 @@ skip_submit:
     }
 
     if(wait_remain > 0){
-	rw_cache_load(hook_info->ca_info,bio->bi_bdev,sector - (sector_t)(wait_remain >> 9),bio->bi_rw,wait_remain);
+	rw_cache_load(ca_info,bio->bi_bdev,sector - (sector_t)(wait_remain >> 9),wait_remain);
     }
 }
-
 static void hook_loaded(void *loaded_private){
-    struct hook_loaded_info *loaded_info;
+    struct hook_bio_info *bio_info;
 
-    loaded_info = (struct hook_loaded_info*)loaded_private;
-    hook_end_bio(loaded_info->bio_info,512);
-    kmem_cache_free(hook_loaded_info_cachep,loaded_info);
+    bio_info = (struct hook_bio_info*)loaded_private;
+    hook_end_bio(bio_info,512);
 }
 static void hook_end_bio(struct hook_bio_info *bio_info,unsigned int size){
     struct bio * ori_bio;

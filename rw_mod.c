@@ -18,7 +18,7 @@ static int __init rw_init(){
     cdev_init(&rw_cdev,&rw_fops);
     cdev_add(&rw_cdev,rw_dev,1);
 
-    pr_alert("RW:4.2 Mint Choco\n");
+    pr_alert("RW:4.3 Mint Choco\n");
     rw_test();
 
     pr_alert("RW:Init\n");
