@@ -22,6 +22,8 @@ struct rw_cache_info* rw_cache_create(struct rw_hook_info *hook_info){
     atomic64_set(&ca_info->cache_size,0);
     atomic64_set(&ca_info->dirty_count,0);
     ca_info->dirty_list = NULL;
+    ca_info->free_start = 0;
+    ca_info->write_start = 0;
 
     return ca_info;
 }
@@ -231,27 +233,43 @@ static void cache_endio(struct bio *bio,int error){
     bio_put(bio);
 }
 
-int rw_cache_scan(struct rw_cache_info *ca_info,unsigned long start,unsigned long free_limit,unsigned long write_limit,unsigned int flags,unsigned long *next_start){
+int rw_cache_scan(struct rw_cache_info *ca_info,unsigned long free_limit,unsigned long write_limit,unsigned int flags){
     int i;
 
     struct rw_cache_cluster **ca_cluster_pool;
     struct rw_cache_cluster *ca_cluster;
+    sector_t start;
     unsigned long addr;
-    bool restart_flag;
+    bool restart;
+    bool free_stop;
+    bool write_stop;
+    u64 write_st;
+    bool write_force;
     int lookup_count;
 
-    struct block_device *bdev;
     struct semaphore bucket;
     atomic_t remain;
     struct completion wait;
 
-    bdev = bdget_disk(ca_info->hook_info->ori_gd,0);
-
     ca_cluster_pool = kmalloc(sizeof(void*) * 4096,GFP_ATOMIC);
+    if(ca_info->free_start < ca_info->write_start){
+	start = ca_info->free_start;
+    }else{
+	start = ca_info->write_start;
+    }
     addr = start << 9UL;
-    restart_flag = false;
+    restart = false;
+    free_stop = false;
+    write_stop = false;
+    write_st = get_jiffies_64();
 
-    sema_init(&bucket,4096);
+    if((flags & CACHE_WRITEBACK_FORCE) != 0){
+	write_force = true;
+    }else{
+	write_force = false;
+    }
+
+    sema_init(&bucket,16);
     atomic_set(&remain,1);
     init_completion(&wait);
 
@@ -264,50 +282,78 @@ int rw_cache_scan(struct rw_cache_info *ca_info,unsigned long start,unsigned lon
 	rcu_read_unlock();
 
 	if(lookup_count == 0){
-	    if(start > 0 && restart_flag == false){
-		addr = 0;
-		restart_flag = true;
+	    start = 0;
+	    addr = 0;
+
+	    if(restart == false){
+		restart = true;
 	    }else{
+		if(free_stop == false){
+		    free_stop = true;
+		    ca_info->free_start = 0;
+		}
+		if(write_stop == false){
+		    write_stop = true;
+		    ca_info->write_start = 0;
+		}
+
 		break;
 	    }
 	}else{
 	    for(i = 0;i < lookup_count;i++){
 		ca_cluster = ca_cluster_pool[i];
-		if(ca_cluster->start == start && restart_flag == true){
-		    addr = ca_cluster->start << 9UL;
-		    goto out_lookup;
-		}
 
 		spin_lock(&ca_cluster->lock);
 
-		if(free_limit > 0){
-		    cache_freeback(ca_info,ca_cluster,&free_limit);
+		start = ca_cluster->start;
+
+		if(free_stop == false){
+		    if((start >= ca_info->free_start) ^ restart){
+			cache_freeback(ca_info,ca_cluster,&free_limit);
+			
+			if(free_limit == 0){
+			    free_stop = true;
+			    ca_info->free_start = start;
+			}
+		    }else if(restart == true){
+			free_stop = true;
+			ca_info->free_start = start;
+		    }
 		}
-		if(write_limit > 0){
-		    cache_writeback(ca_info,ca_cluster,bdev,&write_limit,flags,&bucket,&remain,&wait);
+		if(write_stop == false){
+		    if((start >= ca_info->write_start) ^ restart){
+			cache_writeback(ca_info,ca_cluster,&write_limit,&bucket,&remain,&wait);
+			
+			if(write_limit == 0 || ((get_jiffies_64() - write_st) > 1 * HZ && ~write_force)){
+			    write_stop = true;
+			    ca_info->write_start = start;
+			}
+		    }else if(restart == true){
+			write_stop = true;
+			ca_info->write_start = start;
+		    }
 		}
 
 		spin_unlock(&ca_cluster->lock);
 
-		addr = (ca_cluster->start + CACHE_CLUSTER_SIZE) << 9UL;
-		if(free_limit == 0 && write_limit == 0){
+		if(free_stop == true && write_stop == true){
 		    goto out_lookup;
 		}
+
+		addr = (start + CACHE_CLUSTER_SIZE) << 9UL;
 	    }
 	}
     }
 
 out_lookup:
 
-    if(addr > 0){
-	addr -= (CACHE_CLUSTER_SIZE << 9UL);
-    }
-    *next_start = addr >> 9UL;
     kfree(ca_cluster_pool);
 
     if(!atomic_dec_and_test(&remain)){
 	wait_for_completion_interruptible(&wait);
     }
+
+    pr_alert("\n  %lu %lu %lu %lu\n",free_limit,write_limit,ca_info->free_start,ca_info->write_start);
 
     return 0;
 }
@@ -319,8 +365,8 @@ static void cache_freeback(struct rw_cache_info *ca_info,struct rw_cache_cluster
     }
 
     for(idx = 0;idx < CACHE_CLUSTER_SIZE && *free_limit > 0;idx++){
-	if((ca_cluster->bitmap & (1 << idx)) != 0 && (ca_cluster->dirty & (1 << idx)) == 0){
-	    if(ca_cluster->used[idx] == 0){
+	if((ca_cluster->bitmap & (1 << idx)) != 0){
+	    if(ca_cluster->used[idx] == 0 && (ca_cluster->dirty & (1 << idx)) == 0){
 		atomic64_sub(512,&ca_info->cache_size);
 		kmem_cache_free(cache_sector_cachep,ca_cluster->sector[idx]);
 
@@ -328,7 +374,8 @@ static void cache_freeback(struct rw_cache_info *ca_info,struct rw_cache_cluster
 		ca_cluster->bitmap &= ~(1 << idx);
 
 		(*free_limit)--;
-	    }else{
+	    }
+	    if(ca_cluster->used[idx] > 0){
 		atomic64_dec(&used_count[ca_cluster->used[idx]]);
 		ca_cluster->used[idx]--;
 		atomic64_inc(&used_count[ca_cluster->used[idx]]);
@@ -336,10 +383,8 @@ static void cache_freeback(struct rw_cache_info *ca_info,struct rw_cache_cluster
 	}
     }
 }
-static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluster *ca_cluster,struct block_device *bdev,unsigned long *write_limit,unsigned int flags,struct semaphore *bucket,atomic_t *remain,struct completion *wait){
+static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluster *ca_cluster,unsigned long *write_limit,struct semaphore *bucket,atomic_t *remain,struct completion *wait){
     int i;
-
-    bool force_write;
 
     unsigned int idx;
     unsigned int idx_st;
@@ -347,18 +392,12 @@ static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluste
     unsigned int offset;
     struct bio *new_bio;
     struct cache_writeback_info *wb_info;
-
-    if((flags & CACHE_WRITEBACK_FORCE) != 0){
-	force_write = true;
-    }else{
-	force_write = false;
-    }
-
+    
     idx_st = 0;
     size = 0;
 
     for(idx = 0;idx < CACHE_CLUSTER_SIZE && *write_limit > 0;idx++){
-	if((ca_cluster->dirty & (1 << idx)) != 0 && (/*(ca_cluster->used & (1 << idx)) == 0 ||*/ force_write == true)){
+	if((ca_cluster->dirty & (1 << idx)) != 0){
 	    if(size == 0){
 		idx_st = idx;
 	    }
@@ -379,7 +418,7 @@ static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluste
 	    wb_info->wait = wait;
 
 	    new_bio = bio_alloc(GFP_ATOMIC,((size - 1) / PAGE_SIZE) + 1); 
-	    new_bio->bi_bdev = bdev;
+	    new_bio->bi_bdev = ca_info->hook_info->ori_bdev;
 	    new_bio->bi_sector = ca_cluster->start + (sector_t)idx_st; 
 	    new_bio->bi_size = size;
 	    new_bio->bi_private = wb_info;
@@ -412,7 +451,7 @@ static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluste
 	    down_interruptible(bucket);
 
 	    atomic_inc(remain);
-	    ca_info->hook_info->ori_make(bdev->bd_queue,new_bio);
+	    ca_info->hook_info->ori_make(ca_info->hook_info->ori_bdev->bd_queue,new_bio);
 
 	    spin_lock(&ca_cluster->lock);
 

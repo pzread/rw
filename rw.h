@@ -1,6 +1,6 @@
 #define CACHE_CLUSTER_SIZE 16UL
 #define CACHE_CLUSTER_USED_INIT 1
-#define CACHE_CLUSTER_USED_MAX 255
+#define CACHE_CLUSTER_USED_MAX 16
 
 #define CACHE_WRITEBACK_FORCE 0x1
 
@@ -8,6 +8,7 @@ struct rw_hook_info{
     struct hlist_node node;
 
     struct gendisk *ori_gd;
+    struct block_device *ori_bdev;
     make_request_fn *ori_make;
     struct rw_cache_info *ca_info;
     struct task_struct *watcher;
@@ -21,6 +22,8 @@ struct rw_cache_info{
     atomic64_t cache_size;
     atomic64_t dirty_count;
     struct rw_cache_cluster *dirty_list;
+    sector_t free_start;
+    sector_t write_start;
 };
 
 struct rw_cache_cluster{

@@ -18,7 +18,7 @@ static struct kmem_cache *cache_writeback_info_cachep;
 
 static void cache_endio(struct bio *bio,int error);
 static void cache_freeback(struct rw_cache_info *ca_info,struct rw_cache_cluster *ca_cluster,unsigned long *free_limit);
-static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluster *ca_cluster,struct block_device *bdev,unsigned long *write_limit,unsigned int flags,struct semaphore *bucket,atomic_t *remain,struct completion *wait);
+static void cache_writeback(struct rw_cache_info *ca_info,struct rw_cache_cluster *ca_cluster,unsigned long *write_limit,struct semaphore *bucket,atomic_t *remain,struct completion *wait);
 static void cache_writeback_endio(struct bio *bio,int error);
 
 void rw_cache_init(void);
@@ -29,7 +29,7 @@ u8* rw_cache_alloc_sector(struct rw_cache_info *ca_info);
 int rw_cache_wait_sector(struct rw_cache_cluster *ca_cluster,unsigned int idx,u8 *buffer,rw_loaded_fn loaded_fn,void *loaded_private);
 
 int rw_cache_load(struct rw_cache_info *ca_info,struct block_device *bdev,sector_t start,unsigned int size);
-int rw_cache_scan(struct rw_cache_info *ca_info,unsigned long start,unsigned long free_limit,unsigned long write_limit,unsigned int flags,unsigned long *next_start);
+int rw_cache_scan(struct rw_cache_info *ca_info,unsigned long free_limit,unsigned long write_limit,unsigned int flags);
 
 
 extern atomic64_t used_count[256];

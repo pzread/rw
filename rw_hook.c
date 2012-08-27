@@ -37,6 +37,7 @@ int rw_hook_install(struct gendisk *gd){
     spin_unlock(&hook_info_hash_lock);
 
     hook_info->ori_gd = gd;
+    hook_info->ori_bdev = bdget_disk(gd,0);
     hook_info->ori_make = gd->queue->make_request_fn;
     hook_info->ca_info = rw_cache_create(hook_info);
     hook_info->watcher = kthread_run(hook_watcher,hook_info,"rw_hook_watcher");
@@ -53,8 +54,6 @@ static int hook_watcher(void *data){
     struct rw_hook_info *hook_info;
     struct rw_cache_info *ca_info;
     unsigned long scan_delay;
-    unsigned long scan_start;
-    unsigned long scan_next;
     unsigned long wb_limit;
 
     struct file *tty;
@@ -64,7 +63,6 @@ static int hook_watcher(void *data){
 
     hook_info = (struct rw_hook_info*)data;
     ca_info = hook_info->ca_info;
-    scan_start = 0;
     scan_delay = 0;
     while(true){
 	if(rw_reboot_flag == true){
@@ -88,14 +86,12 @@ static int hook_watcher(void *data){
 	    }
 	    bar_str[50] = '\0';
 
-	    scan_start = 0;
 	    for(i = 0;i < 50;i++){
 		sprintf(out_str,"\rRW:Write-back [%s]  %3d%%",bar_str,i * 2);
 		tty->f_op->write(tty,out_str,strlen(out_str),NULL);
 
 		//Careful, free_limit always should be 0.
-		rw_cache_scan(ca_info,scan_next,0,wb_limit,CACHE_WRITEBACK_FORCE,&scan_next);
-		scan_start = scan_next;
+		rw_cache_scan(ca_info,0,wb_limit,CACHE_WRITEBACK_FORCE);
 
 		bar_str[i] = '#';
 	    }
@@ -115,11 +111,10 @@ static int hook_watcher(void *data){
 
 	scan_delay++;
 	if((scan_delay % 60UL) == 0){
-	    rw_cache_scan(ca_info,scan_start,1048576,0,0,&scan_next);
-	    scan_start = scan_next;
+	    rw_cache_scan(ca_info,1048576,1048576,0);
 
 	    pr_alert("\n%lu %lu\n",scan_delay,atomic64_read(&ca_info->cache_size));
-	    for(i = 0;i < 256;i++){
+	    for(i = 0;i < CACHE_CLUSTER_USED_MAX;i++){
 		if(atomic64_read(&used_count[i]) > 0){
 		    pr_alert("%d %lu\n",i,atomic64_read(&used_count[i]));
 		}
