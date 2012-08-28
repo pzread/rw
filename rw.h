@@ -1,5 +1,5 @@
 #define CACHE_CLUSTER_SIZE 16UL
-#define CACHE_CLUSTER_USED_INIT 1
+#define CACHE_CLUSTER_USED_INIT 2
 #define CACHE_CLUSTER_USED_MAX 16
 
 #define CACHE_WRITEBACK_FORCE 0x1
@@ -22,16 +22,15 @@ struct rw_cache_info{
     atomic64_t cache_size;
     atomic64_t dirty_count;
     struct rw_cache_cluster *dirty_list;
-    sector_t free_start;
-    sector_t write_start;
+    sector_t fb_start;
+    sector_t wb_start;
 };
 
 struct rw_cache_cluster{
     u8 *sector[CACHE_CLUSTER_SIZE];
+    atomic_t used[CACHE_CLUSTER_SIZE];
     u16 bitmap;
-    u8 used[CACHE_CLUSTER_SIZE];
     u16 dirty;
-    atomic_t refcount;
     spinlock_t lock;
     sector_t start;
     struct rw_wait_sector *wait_list;

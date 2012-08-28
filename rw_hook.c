@@ -15,10 +15,6 @@ void rw_hook_init(){
 	INIT_HLIST_HEAD(&hook_info_hash[i]);
     }
 
-    for(i = 0;i < 256;i++){
-	atomic64_set(&used_count[i],0);
-    }
-
     atomic_set(&hook_count,0);
 }
 
@@ -114,11 +110,6 @@ static int hook_watcher(void *data){
 	    rw_cache_scan(ca_info,1048576,1048576,0);
 
 	    pr_alert("\n%lu %lu\n",scan_delay,atomic64_read(&ca_info->cache_size));
-	    for(i = 0;i < CACHE_CLUSTER_USED_MAX;i++){
-		if(atomic64_read(&used_count[i]) > 0){
-		    pr_alert("%d %lu\n",i,atomic64_read(&used_count[i]));
-		}
-	    }
 	}
 
 	schedule_timeout_interruptible(1 * HZ);
@@ -158,15 +149,15 @@ static void hook_make(struct request_queue *q, struct bio *bio){
     struct bio_vec *bv;
     int bv_i;
 
-    sector_t sector;
+    sector_t start;
     unsigned int remain;
     unsigned long addr;
     unsigned int idx;
     unsigned int offset;
     bool need_lookup;
-    bool need_lock;
 
     struct rw_cache_cluster *ca_cluster = NULL;
+    u8 *sector;
     unsigned int wait_remain;
 
     hook_info = hook_info_lookup(bio->bi_bdev->bd_disk);
@@ -184,60 +175,29 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 
     atomic_inc(&hook_info->pending_count);
 
-    sector = bio->bi_sector;
+    start = bio->bi_sector;
     remain = bio->bi_size;
-    addr = ((sector & ~(CACHE_CLUSTER_SIZE - 1UL)) << 9UL);
-    idx = sector & (CACHE_CLUSTER_SIZE - 1UL);
+    addr = ((start & ~(CACHE_CLUSTER_SIZE - 1UL)) << 9UL);
+    idx = start & (CACHE_CLUSTER_SIZE - 1UL);
     need_lookup = true;
-    need_lock = true;
     wait_remain = 0;
 
     bio_for_each_segment(bv,bio,bv_i){
 	for(offset = 0;offset < bv->bv_len;offset += 512){
 	    if(need_lookup == true){
-		if(need_lock == false){
-
-		    spin_unlock_irq(&ca_cluster->lock);
-
-		}
-
 		ca_cluster = rw_cache_get_cluster(ca_info,addr);
 		need_lookup = false;
+	    }
+
+	    atomic_add_unless(&ca_cluster->used[idx],1,CACHE_CLUSTER_USED_MAX);
+
+	    if(rw == 1){
 
 		spin_lock_irq(&ca_cluster->lock);
 
-		need_lock = false;
-	    }else if(need_lock == true){
-		
-		spin_lock_irq(&ca_cluster->lock);
-
-		need_lock = false;
-	    }
-
-	    if(ca_cluster->used[idx] < CACHE_CLUSTER_USED_MAX){
-		atomic64_dec(&used_count[ca_cluster->used[idx]]);
-		ca_cluster->used[idx]++;
-		atomic64_inc(&used_count[ca_cluster->used[idx]]);
-	    }
-
-	    if((ca_cluster->bitmap & (1 << idx)) != 0){
-		if(rw == 1){
-		    if((ca_cluster->dirty & (1 << idx)) == 0){
-			atomic64_inc(&ca_info->dirty_count);
-		    }
-		    ca_cluster->dirty |= (1 << idx);
-		    memcpy(ca_cluster->sector[idx],page_address(bv->bv_page) + bv->bv_offset + offset,512); 
-		}else{
-		    memcpy(page_address(bv->bv_page) + bv->bv_offset + offset,ca_cluster->sector[idx],512); 
-		}
-
-		spin_unlock_irq(&ca_cluster->lock);
-
-		need_lock = true;
-		hook_end_bio(bio_info,512);
-	    }else if(rw == 1){
-		if(ca_cluster->sector[idx] == NULL){
-		    ca_cluster->sector[idx] = rw_cache_alloc_sector(ca_info);
+		sector = rcu_dereference(ca_cluster->sector[idx]);
+		if(sector == NULL){
+		    rcu_assign_pointer(ca_cluster->sector[idx],rw_cache_alloc_sector(ca_info));
 		    ca_cluster->bitmap |= (1 << idx);
 		}
 
@@ -249,52 +209,63 @@ static void hook_make(struct request_queue *q, struct bio *bio){
 
 		spin_unlock_irq(&ca_cluster->lock);
 
-		need_lock = true;
 		hook_end_bio(bio_info,512);
 	    }else{
-		rw_cache_wait_sector(ca_cluster,idx,page_address(bv->bv_page) + bv->bv_offset + offset,hook_loaded,bio_info);
 
-		if(ca_cluster->sector[idx] == NULL){
-		    ca_cluster->sector[idx] = rw_cache_alloc_sector(ca_info);
+		rcu_read_lock();
 
-		    wait_remain += 512;
-		    goto skip_submit;
+		sector = rcu_dereference(ca_cluster->sector[idx]);
+		if(sector != NULL && (ca_cluster->bitmap & (1 << idx)) != 0){
+		    memcpy(page_address(bv->bv_page) + bv->bv_offset + offset,ca_cluster->sector[idx],512); 
+		    
+		    rcu_read_unlock();
+		    
+		    hook_end_bio(bio_info,512);
 		}else{
 
-		    spin_unlock_irq(&ca_cluster->lock);
+		    rcu_read_unlock();
 
-		    need_lock = true;
+		    spin_lock_irq(&ca_cluster->lock);
+
+		    rw_cache_wait_sector(ca_cluster,idx,page_address(bv->bv_page) + bv->bv_offset + offset,hook_loaded,bio_info);
+		    sector = rcu_dereference(ca_cluster->sector[idx]);
+		    if(sector == NULL){
+			rcu_assign_pointer(ca_cluster->sector[idx],rw_cache_alloc_sector(ca_info));
+			ca_cluster->bitmap &= ~(1 << idx);
+			ca_cluster->dirty &= ~(1 << idx);
+			atomic_set(&ca_cluster->used[idx],CACHE_CLUSTER_USED_INIT);
+
+			spin_unlock_irq(&ca_cluster->lock);
+
+			wait_remain += 512;
+			goto skip_submit;
+		    }else{
+
+			spin_unlock_irq(&ca_cluster->lock);
+
+		    }
 		}
 	    }
 
 	    if(wait_remain > 0){
-		rw_cache_load(ca_info,bio->bi_bdev,sector - (sector_t)(wait_remain >> 9),wait_remain);
+		rw_cache_load(ca_info,bio->bi_bdev,start - (sector_t)(wait_remain >> 9),wait_remain);
 		wait_remain = 0;
 	    }
 
 skip_submit:
 
-	    sector += 1UL;
+	    start += 1UL;
 	    remain -= 512;
-	    addr = ((sector & ~(CACHE_CLUSTER_SIZE - 1UL)) << 9UL);
-	    idx = sector & (CACHE_CLUSTER_SIZE - 1UL);
+	    addr = ((start & ~(CACHE_CLUSTER_SIZE - 1UL)) << 9UL);
+	    idx = start & (CACHE_CLUSTER_SIZE - 1UL);
 	    if(idx == 0){
-		atomic_dec(&ca_cluster->refcount);
 		need_lookup = true;
 	    }
 	}
     }
-    if(need_lock == false){
-
-	spin_unlock_irq(&ca_cluster->lock);
-    
-    }
-    if(need_lookup == false){
-	atomic_dec(&ca_cluster->refcount);
-    }
 
     if(wait_remain > 0){
-	rw_cache_load(ca_info,bio->bi_bdev,sector - (sector_t)(wait_remain >> 9),wait_remain);
+	rw_cache_load(ca_info,bio->bi_bdev,start - (sector_t)(wait_remain >> 9),wait_remain);
     }
 }
 static void hook_loaded(void *loaded_private){
