@@ -365,8 +365,6 @@ out_lookup:
 	wait_for_completion_interruptible(&wait);
     }
 
-    pr_alert("\n  %lu %lu %lu %lu\n",free_limit,write_limit,ca_info->fb_start,ca_info->wb_start);
-
     return 0;
 }
 static void cache_freeback(struct rw_cache_info *ca_info,struct rw_cache_cluster *ca_cluster,unsigned long *free_limit,struct cache_freeback_info **fb_list){
