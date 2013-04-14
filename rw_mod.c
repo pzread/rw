@@ -36,7 +36,7 @@ module_param(rw_test_major,int,S_IRUGO);
 module_param(rw_test_minor,int,S_IRUGO);
 module_init(rw_init);
 module_exit(rw_exit);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual MIT/GPL");
 
 static int rw_open(struct inode *i,struct file *f){
     return 0;
